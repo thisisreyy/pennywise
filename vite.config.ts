@@ -13,25 +13,28 @@ export default defineConfig({
     // Ensure proper module format
     rollupOptions: {
       output: {
-        // Use .js extension for all JavaScript files
+        // Use .js extension for all JavaScript files (critical for MIME type)
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
-        // Ensure ES modules format
+        // Use ES modules format (works better with modern hosting)
         format: 'es'
+        // Removed manualChunks - conflicts with inlineDynamicImports
       }
     },
-    // Minify for production
+    // Enable Terser minification
     minify: 'terser',
-    // Source maps for debugging
-    sourcemap: false
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.logs in production
+        drop_debugger: true
+      }
+    },
+    // Source maps for debugging (disable for production)
+    sourcemap: false,
+    // Chunk size warning limit
+    chunkSizeWarningLimit: 1000
   },
   // Use relative paths for deployment
-  base: './',
-  // Ensure proper server configuration
-  server: {
-    headers: {
-      'Content-Type': 'application/javascript'
-    }
-  }
+  base: './'
 });
