@@ -7,9 +7,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PennyWise - Smart Personal Finance Tracker</title>
     <meta name="description" content="AI-powered personal expense tracker with intelligent budget insights">
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="./assets/index.css" as="style" />
+    
+    <!-- Critical CSS inline for faster loading -->
+    <style>
+      /* Critical loading styles */
+      #root { min-height: 100vh; }
+      .loading-screen { 
+        display: flex; 
+        align-items: center; 
+        justify-content: center; 
+        min-height: 100vh; 
+        background: #111827;
+        color: #fff;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <div id="root">
+      <div class="loading-screen">
+        <div>Loading PennyWise...</div>
+      </div>
+    </div>
+    
+    <!-- Load script with explicit type and defer -->
+    <script defer src="./src/main.tsx"></script>
+    
+    <!-- Fallback error handling -->
+    <script>
+      window.addEventListener('error', function(e) {
+        if (e.message && e.message.includes('MIME type')) {
+          console.error('MIME type error detected. Please check server configuration.');
+          document.getElementById('root').innerHTML = `
+            <div style="padding: 20px; text-align: center; font-family: Arial, sans-serif;">
+              <h2>Loading Error</h2>
+              <p>There's a server configuration issue. Please contact support.</p>
+              <p style="font-size: 12px; color: #666;">Error: ${e.message}</p>
+            </div>
+          `;
+        }
+      });
+    </script>
   </body>
 </html>
