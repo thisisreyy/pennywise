@@ -8,17 +8,30 @@ export default defineConfig({
     exclude: ['lucide-react'],
   },
   build: {
-    // Ensure proper module format
+    // Use legacy build for better compatibility
     target: 'es2015',
+    // Ensure proper module format
     rollupOptions: {
       output: {
-        // Ensure JS files have proper extensions
+        // Use .js extension for all JavaScript files
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]'
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+        // Ensure ES modules format
+        format: 'es'
       }
-    }
+    },
+    // Minify for production
+    minify: 'terser',
+    // Source maps for debugging
+    sourcemap: false
   },
-  // Ensure proper base path for deployment
+  // Use relative paths for deployment
   base: './',
+  // Ensure proper server configuration
+  server: {
+    headers: {
+      'Content-Type': 'application/javascript'
+    }
+  }
 });
