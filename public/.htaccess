@@ -1,83 +1,144 @@
-# CRITICAL MIME TYPE FIXES - Multiple approaches for maximum compatibility
+# CRITICAL MIME TYPE FIXES - Enhanced for better compatibility
 
-# Method 1: Force correct MIME types with multiple directives
-<FilesMatch "\.(js|mjs|jsx)$">
+# Enable rewrite engine
+RewriteEngine On
+
+# Method 1: Force correct MIME types for JavaScript files
+<FilesMatch "\.(js|mjs|jsx|ts|tsx)$">
+    # Force JavaScript MIME type
     ForceType application/javascript
-    Header always set Content-Type "application/javascript; charset=utf-8"
-    Header always set X-Content-Type-Options nosniff
+    
+    # Set headers to ensure proper handling
+    <IfModule mod_headers.c>
+        Header always set Content-Type "application/javascript; charset=utf-8"
+        Header always set X-Content-Type-Options nosniff
+        Header always unset X-Content-Type-Options
+        Header always set X-Content-Type-Options nosniff
+    </IfModule>
 </FilesMatch>
 
+# Method 2: CSS files
 <FilesMatch "\.css$">
     ForceType text/css
-    Header always set Content-Type "text/css; charset=utf-8"
+    <IfModule mod_headers.c>
+        Header always set Content-Type "text/css; charset=utf-8"
+    </IfModule>
 </FilesMatch>
 
-# Method 2: AddType directives (backup)
-AddType application/javascript .js
-AddType application/javascript .mjs
-AddType application/javascript .jsx
-AddType text/css .css
-AddType application/json .json
-AddType image/svg+xml .svg
-
-# Method 3: Override server defaults
+# Method 3: Override server MIME type configuration
 <IfModule mod_mime.c>
+    # Remove any existing handlers
     RemoveType .js
-    AddType application/javascript .js
     RemoveType .mjs
-    AddType application/javascript .mjs
+    RemoveType .jsx
     RemoveType .css
+    
+    # Add correct MIME types
+    AddType application/javascript .js
+    AddType application/javascript .mjs
+    AddType application/javascript .jsx
     AddType text/css .css
+    AddType application/json .json
+    AddType image/svg+xml .svg
+    AddType image/png .png
+    AddType image/jpeg .jpg
+    AddType image/gif .gif
+    AddType image/webp .webp
+    AddType font/woff .woff
+    AddType font/woff2 .woff2
 </IfModule>
 
-# Method 4: Force handler for JS files
+# Method 4: Force handler override for problematic servers
 <FilesMatch "\.js$">
     SetHandler default-handler
     ForceType application/javascript
 </FilesMatch>
 
 # Handle React Router (client-side routing)
-RewriteEngine On
-RewriteBase /
-
 # Don't rewrite files that exist
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Rewrite everything else to index.html
-RewriteRule ^ index.html [L]
+# Handle assets folder
+RewriteCond %{REQUEST_URI} ^/assets/
+RewriteRule ^ - [L]
 
-# Security headers
+# Handle API routes if any
+RewriteCond %{REQUEST_URI} ^/api/
+RewriteRule ^ - [L]
+
+# Rewrite everything else to index.html for React Router
+RewriteRule ^ /index.html [L]
+
+# Security and performance headers
 <IfModule mod_headers.c>
+    # Security headers
     Header always set X-Content-Type-Options nosniff
     Header always set X-Frame-Options DENY
     Header always set X-XSS-Protection "1; mode=block"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    
+    # CORS headers for assets
+    <FilesMatch "\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2)$">
+        Header always set Access-Control-Allow-Origin "*"
+        Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
+        Header always set Access-Control-Allow-Headers "Content-Type"
+    </FilesMatch>
+    
+    # Force MIME type for JavaScript files (critical fix)
+    <FilesMatch "\.js$">
+        Header always set Content-Type "application/javascript; charset=utf-8"
+        Header always unset Content-Type
+        Header always set Content-Type "application/javascript; charset=utf-8"
+    </FilesMatch>
 </IfModule>
 
-# Enable compression
+# Enable compression for better performance
 <IfModule mod_deflate.c>
     AddOutputFilterByType DEFLATE text/plain
     AddOutputFilterByType DEFLATE text/html
     AddOutputFilterByType DEFLATE text/css
     AddOutputFilterByType DEFLATE application/javascript
     AddOutputFilterByType DEFLATE application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
 </IfModule>
 
-# Cache control
+# Cache control for better performance
 <IfModule mod_expires.c>
     ExpiresActive on
+    
+    # Cache JavaScript and CSS for 1 year (they have hashes)
     ExpiresByType application/javascript "access plus 1 year"
     ExpiresByType text/css "access plus 1 year"
+    
+    # Cache images for 1 year
     ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
     ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    
+    # Cache fonts for 1 year
+    ExpiresByType font/woff "access plus 1 year"
+    ExpiresByType font/woff2 "access plus 1 year"
+    
+    # Don't cache HTML (for updates)
+    ExpiresByType text/html "access plus 0 seconds"
 </IfModule>
 
-# Fallback for problematic servers
+# Additional fallback for stubborn servers
 <IfModule mod_rewrite.c>
-    # Force JS files to be served with correct MIME type
-    RewriteCond %{REQUEST_URI} \.js$
-    RewriteRule ^(.*)$ $1 [E=force_js_mime:1]
-    Header always set Content-Type "application/javascript; charset=utf-8" env=force_js_mime
+    # Special handling for JavaScript files
+    RewriteCond %{REQUEST_URI} \.js$ [NC]
+    RewriteCond %{HTTP:Accept} !application/javascript [NC]
+    RewriteRule ^(.*)$ $1 [E=force_js_mime:1,L]
+    
+    <IfModule mod_headers.c>
+        Header always set Content-Type "application/javascript; charset=utf-8" env=force_js_mime
+    </IfModule>
 </IfModule>
+
+# Error pages
+ErrorDocument 404 /index.html
