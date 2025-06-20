@@ -1,80 +1,96 @@
-# CRITICAL MIME TYPE FIXES - Enhanced for better compatibility
+# CRITICAL MIME TYPE FIXES - Namecheap Specific Configuration
 
 # Enable rewrite engine
 RewriteEngine On
 
-# Method 1: Force correct MIME types for JavaScript files
-<FilesMatch "\.(js|mjs|jsx|ts|tsx)$">
-    # Force JavaScript MIME type
+# AGGRESSIVE MIME TYPE FIXING - Multiple methods for maximum compatibility
+
+# Method 1: Force JavaScript MIME type with multiple approaches
+<FilesMatch "\.(js|mjs|jsx)$">
+    # Remove any existing content type
+    Header unset Content-Type
+    
+    # Force the correct MIME type
     ForceType application/javascript
     
-    # Set headers to ensure proper handling
+    # Set multiple headers to ensure compliance
     <IfModule mod_headers.c>
         Header always set Content-Type "application/javascript; charset=utf-8"
         Header always set X-Content-Type-Options nosniff
-        Header always unset X-Content-Type-Options
-        Header always set X-Content-Type-Options nosniff
+        Header always append Vary Accept-Encoding
     </IfModule>
+    
+    # Override any server defaults
+    SetEnv force-no-vary
+    SetHandler default-handler
 </FilesMatch>
 
 # Method 2: CSS files
 <FilesMatch "\.css$">
+    Header unset Content-Type
     ForceType text/css
     <IfModule mod_headers.c>
         Header always set Content-Type "text/css; charset=utf-8"
     </IfModule>
 </FilesMatch>
 
-# Method 3: Override server MIME type configuration
+# Method 3: Comprehensive MIME type overrides
 <IfModule mod_mime.c>
-    # Remove any existing handlers
-    RemoveType .js
-    RemoveType .mjs
-    RemoveType .jsx
-    RemoveType .css
+    # Clear existing types first
+    RemoveType .js .mjs .jsx .css .json .svg .png .jpg .gif .woff .woff2
     
-    # Add correct MIME types
-    AddType application/javascript .js
-    AddType application/javascript .mjs
-    AddType application/javascript .jsx
-    AddType text/css .css
-    AddType application/json .json
-    AddType image/svg+xml .svg
+    # Add correct MIME types with explicit charset
+    AddType "application/javascript; charset=utf-8" .js
+    AddType "application/javascript; charset=utf-8" .mjs
+    AddType "application/javascript; charset=utf-8" .jsx
+    AddType "text/css; charset=utf-8" .css
+    AddType "application/json; charset=utf-8" .json
+    AddType "image/svg+xml; charset=utf-8" .svg
     AddType image/png .png
-    AddType image/jpeg .jpg
+    AddType image/jpeg .jpg .jpeg
     AddType image/gif .gif
     AddType image/webp .webp
     AddType font/woff .woff
     AddType font/woff2 .woff2
 </IfModule>
 
-# Method 4: Force handler override for problematic servers
-<FilesMatch "\.js$">
+# Method 4: Rewrite rules to force MIME type
+<IfModule mod_rewrite.c>
+    # Special rewrite for JS files to force correct handling
+    RewriteCond %{REQUEST_URI} \.(js|mjs)$ [NC]
+    RewriteRule ^(.*)$ $1 [E=JS_FILE:1,L]
+    
+    # Set environment variable for JS files
+    <IfModule mod_headers.c>
+        Header always set Content-Type "application/javascript; charset=utf-8" env=JS_FILE
+        Header always unset Content-Type env=JS_FILE
+        Header always set Content-Type "application/javascript; charset=utf-8" env=JS_FILE
+    </IfModule>
+</IfModule>
+
+# Method 5: Alternative handler approach for problematic servers
+<Files "*.js">
     SetHandler default-handler
     ForceType application/javascript
-</FilesMatch>
+    <IfModule mod_headers.c>
+        Header set Content-Type "application/javascript; charset=utf-8"
+    </IfModule>
+</Files>
 
-# Handle React Router (client-side routing)
-# Don't rewrite files that exist
-RewriteCond %{REQUEST_FILENAME} -f [OR]
-RewriteCond %{REQUEST_FILENAME} -d
-RewriteRule ^ - [L]
-
-# Handle assets folder
-RewriteCond %{REQUEST_URI} ^/assets/
-RewriteRule ^ - [L]
-
-# Handle API routes if any
-RewriteCond %{REQUEST_URI} ^/api/
-RewriteRule ^ - [L]
-
-# Rewrite everything else to index.html for React Router
-RewriteRule ^ /index.html [L]
-
-# Security and performance headers
+# Method 6: Namecheap specific fixes
 <IfModule mod_headers.c>
+    # Force correct headers for all JavaScript files
+    <FilesMatch "\.js$">
+        Header unset Content-Type
+        Header always add Content-Type "application/javascript; charset=utf-8"
+        Header always set X-Content-Type-Options nosniff
+        
+        # Additional headers to prevent server override
+        Header always set Cache-Control "public, max-age=31536000"
+        Header always set Expires "Thu, 31 Dec 2025 23:59:59 GMT"
+    </FilesMatch>
+    
     # Security headers
-    Header always set X-Content-Type-Options nosniff
     Header always set X-Frame-Options DENY
     Header always set X-XSS-Protection "1; mode=block"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
@@ -85,13 +101,25 @@ RewriteRule ^ /index.html [L]
         Header always set Access-Control-Allow-Methods "GET, POST, OPTIONS"
         Header always set Access-Control-Allow-Headers "Content-Type"
     </FilesMatch>
-    
-    # Force MIME type for JavaScript files (critical fix)
-    <FilesMatch "\.js$">
-        Header always set Content-Type "application/javascript; charset=utf-8"
-        Header always unset Content-Type
-        Header always set Content-Type "application/javascript; charset=utf-8"
-    </FilesMatch>
+</IfModule>
+
+# Handle React Router (client-side routing)
+<IfModule mod_rewrite.c>
+    # Don't rewrite files that exist
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Handle assets folder specifically
+    RewriteCond %{REQUEST_URI} ^/assets/
+    RewriteRule ^ - [L]
+
+    # Handle API routes if any
+    RewriteCond %{REQUEST_URI} ^/api/
+    RewriteRule ^ - [L]
+
+    # Rewrite everything else to index.html for React Router
+    RewriteRule ^ /index.html [L]
 </IfModule>
 
 # Enable compression for better performance
@@ -128,17 +156,16 @@ RewriteRule ^ /index.html [L]
     ExpiresByType text/html "access plus 0 seconds"
 </IfModule>
 
-# Additional fallback for stubborn servers
-<IfModule mod_rewrite.c>
-    # Special handling for JavaScript files
-    RewriteCond %{REQUEST_URI} \.js$ [NC]
-    RewriteCond %{HTTP:Accept} !application/javascript [NC]
-    RewriteRule ^(.*)$ $1 [E=force_js_mime:1,L]
-    
-    <IfModule mod_headers.c>
-        Header always set Content-Type "application/javascript; charset=utf-8" env=force_js_mime
-    </IfModule>
-</IfModule>
-
 # Error pages
 ErrorDocument 404 /index.html
+
+# Additional Namecheap specific configurations
+<IfModule mod_env.c>
+    SetEnv FORCE_JS_MIME 1
+</IfModule>
+
+# Last resort: Override everything for JS files
+<LocationMatch "\.js$">
+    ForceType application/javascript
+    Header always set Content-Type "application/javascript; charset=utf-8"
+</LocationMatch>

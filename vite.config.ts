@@ -17,8 +17,12 @@ export default defineConfig({
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
-        // Use ES modules format (better for modern hosting)
-        format: 'es'
+        // Use ES modules format but ensure compatibility
+        format: 'es',
+        // Add explicit module markers
+        banner: '/* ES Module */',
+        // Ensure proper exports
+        exports: 'auto'
       }
     },
     // Enable Terser minification
@@ -37,18 +41,29 @@ export default defineConfig({
     // Chunk size warning limit
     chunkSizeWarningLimit: 1000,
     // Ensure assets are properly handled
-    assetsDir: 'assets'
+    assetsDir: 'assets',
+    // Force proper file extensions
+    outDir: 'dist',
+    emptyOutDir: true
   },
   // Use absolute paths for production
   base: '/',
   // Server configuration for development
   server: {
     port: 3000,
-    open: true
+    open: true,
+    // Add MIME type handling for dev server
+    middlewareMode: false,
+    headers: {
+      'Content-Type': 'application/javascript; charset=utf-8'
+    }
   },
   // Preview configuration
   preview: {
     port: 4173,
-    open: true
+    open: true,
+    headers: {
+      'Content-Type': 'application/javascript; charset=utf-8'
+    }
   }
 });
