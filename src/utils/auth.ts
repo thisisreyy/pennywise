@@ -20,6 +20,7 @@ export interface AuthSession {
   token: string;
   expiresAt: number;
   rememberMe: boolean;
+  createdAt: number;
 }
 
 // Simple password hashing (in production, use bcrypt on backend)
@@ -57,31 +58,60 @@ const saveUsers = (users: Record<string, any>): void => {
   }
 };
 
-// Load auth session
+// Load auth session with better error handling and debugging
 export const loadAuthSession = (): AuthSession | null => {
   try {
     const data = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (!data) return null;
+    if (!data) {
+      console.log('No auth session found in localStorage');
+      return null;
+    }
 
     const session: AuthSession = JSON.parse(data);
+    const now = Date.now();
+    
+    console.log('Session check:', {
+      hasSession: !!session,
+      expiresAt: new Date(session.expiresAt).toLocaleString(),
+      now: new Date(now).toLocaleString(),
+      isExpired: now > session.expiresAt,
+      rememberMe: session.rememberMe,
+      timeRemaining: Math.round((session.expiresAt - now) / (1000 * 60 * 60)) + ' hours'
+    });
     
     // Check if session is expired
-    if (Date.now() > session.expiresAt) {
+    if (now > session.expiresAt) {
+      console.log('Session expired, removing from storage');
       localStorage.removeItem(AUTH_STORAGE_KEY);
       return null;
     }
 
+    // Extend session if it's close to expiring and rememberMe is true
+    if (session.rememberMe && (session.expiresAt - now) < (24 * 60 * 60 * 1000)) {
+      console.log('Extending session for remember me user');
+      session.expiresAt = now + SESSION_DURATION;
+      saveAuthSession(session);
+    }
+
     return session;
-  } catch {
+  } catch (error) {
+    console.error('Error loading auth session:', error);
     localStorage.removeItem(AUTH_STORAGE_KEY);
     return null;
   }
 };
 
-// Save auth session
+// Save auth session with better error handling
 const saveAuthSession = (session: AuthSession): void => {
   try {
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+    const sessionData = JSON.stringify(session);
+    localStorage.setItem(AUTH_STORAGE_KEY, sessionData);
+    console.log('Session saved:', {
+      userId: session.user.id,
+      expiresAt: new Date(session.expiresAt).toLocaleString(),
+      rememberMe: session.rememberMe,
+      token: session.token.substring(0, 8) + '...'
+    });
   } catch (error) {
     console.error('Failed to save auth session:', error);
   }
@@ -90,6 +120,7 @@ const saveAuthSession = (session: AuthSession): void => {
 // Clear auth session
 export const clearAuthSession = (): void => {
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  console.log('Auth session cleared');
 };
 
 // Validate email format
@@ -180,7 +211,7 @@ export const signUp = async (credentials: SignupCredentials): Promise<{ success:
   }
 };
 
-// Sign in user
+// Sign in user with improved session handling
 export const signIn = async (credentials: LoginCredentials): Promise<{ success: boolean; error?: string; session?: AuthSession }> => {
   try {
     const { email, password, rememberMe = false } = credentials;
@@ -211,8 +242,10 @@ export const signIn = async (credentials: LoginCredentials): Promise<{ success: 
     users[user.id] = user;
     saveUsers(users);
 
-    // Create session
-    const sessionDuration = rememberMe ? SESSION_DURATION : 24 * 60 * 60 * 1000; // 24 hours if not remembered
+    // Create session with proper duration
+    const sessionDuration = rememberMe ? SESSION_DURATION : 24 * 60 * 60 * 1000; // 7 days vs 24 hours
+    const currentTime = Date.now();
+    
     const session: AuthSession = {
       user: {
         id: user.id,
@@ -221,14 +254,23 @@ export const signIn = async (credentials: LoginCredentials): Promise<{ success: 
         lastLogin: now
       },
       token: generateToken(),
-      expiresAt: Date.now() + sessionDuration,
-      rememberMe
+      expiresAt: currentTime + sessionDuration,
+      rememberMe,
+      createdAt: currentTime
     };
 
     saveAuthSession(session);
 
+    console.log('User signed in:', {
+      email: user.email,
+      rememberMe,
+      sessionDuration: rememberMe ? '7 days' : '24 hours',
+      expiresAt: new Date(session.expiresAt).toLocaleString()
+    });
+
     return { success: true, session };
   } catch (error) {
+    console.error('Sign in error:', error);
     return { success: false, error: 'Failed to sign in. Please try again.' };
   }
 };
@@ -236,6 +278,7 @@ export const signIn = async (credentials: LoginCredentials): Promise<{ success: 
 // Sign out user
 export const signOut = (): void => {
   clearAuthSession();
+  console.log('User signed out');
 };
 
 // Check if user is authenticated
@@ -248,4 +291,23 @@ export const isAuthenticated = (): boolean => {
 export const getCurrentUser = (): User | null => {
   const session = loadAuthSession();
   return session?.user || null;
+};
+
+// Refresh session if needed (call this periodically)
+export const refreshSession = (): boolean => {
+  const session = loadAuthSession();
+  if (!session) return false;
+
+  const now = Date.now();
+  const timeUntilExpiry = session.expiresAt - now;
+  
+  // If session expires in less than 1 hour and rememberMe is true, extend it
+  if (session.rememberMe && timeUntilExpiry < (60 * 60 * 1000) && timeUntilExpiry > 0) {
+    session.expiresAt = now + SESSION_DURATION;
+    saveAuthSession(session);
+    console.log('Session refreshed');
+    return true;
+  }
+  
+  return timeUntilExpiry > 0;
 };

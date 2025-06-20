@@ -34,11 +34,26 @@ function App() {
   const [currencySettings, setCurrencySettings] = useState<CurrencySettings>(() => loadCurrencySettings());
   const [baseCurrency, setBaseCurrency] = useState<string>(currencySettings.baseCurrency);
 
+  // Check authentication state and show/hide landing page
+  useEffect(() => {
+    if (!isLoading) {
+      // If user is authenticated, skip landing page
+      if (isAuthenticated && user) {
+        console.log('User is authenticated, skipping landing page');
+        setShowLanding(false);
+      } else {
+        console.log('User not authenticated, showing landing page');
+        setShowLanding(true);
+      }
+    }
+  }, [isAuthenticated, user, isLoading]);
+
   // Load transactions when user changes or component mounts
   useEffect(() => {
     if (!isLoading) {
       const savedTransactions = loadTransactions(user?.id);
       setTransactions(savedTransactions);
+      console.log('Loaded transactions:', savedTransactions.length);
     }
   }, [user?.id, isLoading]);
 
@@ -74,6 +89,7 @@ function App() {
     migrateAnonymousData(authenticatedUser.id);
     signIn(authenticatedUser);
     setShowAuthModal(false);
+    setShowLanding(false); // Ensure we hide the landing page
   };
 
   const handleSignOut = () => {
@@ -185,6 +201,7 @@ function App() {
         <div className="text-center">
           <img src="/logo.png" alt="PennyWise" className="h-16 w-auto mx-auto mb-4 animate-pulse" />
           <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-gray-400 mt-4">Loading your financial data...</p>
         </div>
       </div>
     );

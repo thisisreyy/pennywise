@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { User, AuthState } from '../types';
-import { loadAuthSession, signOut as authSignOut, getCurrentUser } from '../utils/auth';
+import { loadAuthSession, signOut as authSignOut, getCurrentUser, refreshSession } from '../utils/auth';
 
 export const useAuth = () => {
   const [authState, setAuthState] = useState<AuthState>({
@@ -14,8 +14,11 @@ export const useAuth = () => {
     // Check for existing session on mount
     const checkAuth = () => {
       try {
+        console.log('Checking authentication state...');
         const session = loadAuthSession();
+        
         if (session) {
+          console.log('Valid session found:', session.user.email);
           setAuthState({
             user: session.user,
             isAuthenticated: true,
@@ -23,6 +26,7 @@ export const useAuth = () => {
             error: null
           });
         } else {
+          console.log('No valid session found');
           setAuthState({
             user: null,
             isAuthenticated: false,
@@ -31,6 +35,7 @@ export const useAuth = () => {
           });
         }
       } catch (error) {
+        console.error('Auth check error:', error);
         setAuthState({
           user: null,
           isAuthenticated: false,
@@ -41,9 +46,30 @@ export const useAuth = () => {
     };
 
     checkAuth();
+
+    // Set up periodic session refresh
+    const refreshInterval = setInterval(() => {
+      const isValid = refreshSession();
+      if (!isValid) {
+        // Session expired, update state
+        const currentSession = loadAuthSession();
+        if (!currentSession && authState.isAuthenticated) {
+          console.log('Session expired, logging out');
+          setAuthState({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: null
+          });
+        }
+      }
+    }, 5 * 60 * 1000); // Check every 5 minutes
+
+    return () => clearInterval(refreshInterval);
   }, []);
 
   const signIn = (user: User) => {
+    console.log('Setting user in auth state:', user.email);
     setAuthState({
       user,
       isAuthenticated: true,
@@ -53,6 +79,7 @@ export const useAuth = () => {
   };
 
   const signOut = () => {
+    console.log('Signing out user');
     authSignOut();
     setAuthState({
       user: null,
