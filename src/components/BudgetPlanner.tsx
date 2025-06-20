@@ -37,6 +37,7 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ transactions, baseCurrenc
   const [showForm, setShowForm] = useState(false);
   const [editingBudget, setEditingBudget] = useState<BudgetCategory | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<'current' | 'last' | 'projected'>('current');
+  const [isInitialized, setIsInitialized] = useState(false);
   const [formData, setFormData] = useState({
     name: DEFAULT_CATEGORIES[0].name,
     budgetAmount: '',
@@ -136,20 +137,20 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ transactions, baseCurrenc
     return { currentByCategory, lastByCategory, currentMonth: dateAnalysis.currentMonth, lastMonth };
   }, [transactions, baseCurrency, currencySettings, dateAnalysis]);
 
+  // Load budgets only once when component mounts or user changes
   useEffect(() => {
     const savedBudgets = loadBudgets(user?.id);
-    let initialBudgets: BudgetCategory[] = [];
-
+    
     if (savedBudgets.length > 0) {
-      initialBudgets = savedBudgets;
+      setBudgets(savedBudgets);
     } else {
-      // Create smart initial budgets based on spending patterns
+      // Create smart initial budgets based on spending patterns only if no saved budgets exist
       const topCategories = Object.entries(spendingData.currentByCategory)
         .sort(([,a], [,b]) => b.total - a.total)
         .slice(0, 8);
 
       if (topCategories.length > 0) {
-        initialBudgets = topCategories.map(([categoryName, data], index) => {
+        const initialBudgets = topCategories.map(([categoryName, data], index) => {
           const category = DEFAULT_CATEGORIES.find(cat => cat.name === categoryName) || DEFAULT_CATEGORIES[0];
           // Suggest budget 20% higher than current spending
           const suggestedBudget = Math.ceil(data.total * 1.2);
@@ -172,9 +173,10 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ transactions, baseCurrenc
             userId: user?.id
           };
         });
+        setBudgets(initialBudgets);
       } else {
         // Default budgets if no transaction data
-        initialBudgets = DEFAULT_CATEGORIES.slice(0, 6).map((cat, index) => ({
+        const defaultBudgets = DEFAULT_CATEGORIES.slice(0, 6).map((cat, index) => ({
           id: `budget-${index}`,
           name: cat.name,
           budgetAmount: 500,
@@ -191,14 +193,16 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ transactions, baseCurrenc
           weeklyBreakdown: [],
           userId: user?.id
         }));
+        setBudgets(defaultBudgets);
       }
     }
+    setIsInitialized(true);
+  }, [user?.id]); // Only depend on user ID, not spending data
 
-    setBudgets(initialBudgets);
-  }, [spendingData, dateAnalysis.daysRemaining, user?.id]);
-
+  // Update budget calculations when spending data changes, but preserve budget amounts
   useEffect(() => {
-    // Update budget data with enhanced date-based analysis
+    if (!isInitialized || budgets.length === 0) return;
+
     const updatedBudgets = budgets.map(budget => {
       const currentData = spendingData.currentByCategory[budget.name] || { 
         total: 0, 
@@ -232,7 +236,7 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ transactions, baseCurrenc
       }
 
       return {
-        ...budget,
+        ...budget, // Preserve all existing budget data including budgetAmount
         spentAmount: currentData.total,
         transactionCount: currentData.count,
         averageTransaction: currentData.count > 0 ? currentData.total / currentData.count : 0,
@@ -248,8 +252,9 @@ const BudgetPlanner: React.FC<BudgetPlannerProps> = ({ transactions, baseCurrenc
     });
 
     setBudgets(updatedBudgets);
+    // Save the updated budgets to preserve calculations
     saveBudgets(updatedBudgets, user?.id);
-  }, [spendingData, budgets.length, dateAnalysis, user?.id]);
+  }, [spendingData, dateAnalysis, isInitialized, user?.id]); // Don't include budgets in dependencies to avoid infinite loop
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
